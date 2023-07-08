@@ -1,0 +1,150 @@
+menu "Climate_terminal02 configuration"
+    choice TEMPERATURE_SENSOR_I2C_ADDRESS
+        prompt "Select I2C address"
+        default TEMPERATURE_SENSOR_I2C_ADDRESS_GND
+        help
+            Select I2C address
+
+        config TEMPERATURE_SENSOR_I2C_ADDRESS_GND
+            bool "AHT_I2C_ADDRESS_GND"
+            help
+                Choose this when ADDR pin is connected to ground
+        config TEMPERATURE_SENSOR_I2C_ADDRESS_VCC
+            bool "AHT_I2C_ADDRESS_VCC"
+            help
+                Choose this when ADDR pin is connected to VCC
+    endchoice
+
+    choice TEMPERATURE_SENSOR_CHIP_TYPE
+        prompt "Select chip type"
+        default TEMPERATURE_SENSOR_TYPE_AHT1x
+        help
+            Select AHT chip type
+
+        config TEMPERATURE_SENSOR_TYPE_AHT1x
+            bool "AHT10 or AHT15"
+        config TEMPERATURE_SENSOR_TYPE_AHT20
+            bool "AHT20"
+    endchoice
+
+    choice AIR_PRESSURE_SENSOR_I2C_ADDRESS
+        prompt "Select bmp280 I2C address"
+        default AIR_PRESSURE_I2C_ADDRESS_VCC
+        help 
+            Select I2C address
+        
+        config AIR_PRESSURE_I2C_ADDRESS_GND
+            bool "BMP280_I2C_ADDRESS_GND"
+            help 
+                Choose this when SDO/SDD Pin is connected to GND
+
+        config AIR_PRESSURE_I2C_ADDRESS_VCC
+            bool "BMP280_I2C_ADDRESS_VCC"
+            help 
+                Choose this when SDO/SDD Pin is connected to VCC     
+    endchoice
+    
+    
+
+    config CLIMATE_TERMINAL_SENSOR_I2C_PORT
+        int "i2c port number"
+        default 0
+        range 0 1
+        help 
+            I2C port number used by sensor.
+
+
+    config CLIMATE_TERMINAL_SENSOR_I2C_MASTER_SCL
+        int "SCL GPIO Number"
+        default 5 if IDF_TARGET_ESP8266
+        default 6 if IDF_TARGET_ESP32C3
+        default 2 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+        help
+            GPIO number for I2C Master clock line.
+
+    config CLIMATE_TERMINAL_SENSOR_I2C_MASTER_SDA
+        int "SDA GPIO Number"
+        default 4 if IDF_TARGET_ESP8266
+        default 5 if IDF_TARGET_ESP32C3
+        default 15 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+        help
+            GPIO number for I2C Master data line.
+
+    config USE_CMIOT_MQTT_ONENET_PLATFORM
+        bool "whether to use OneNet-MQTT Platform?"
+        default n
+        help 
+            "Using OneNet platform as mqtt broker?"
+
+
+    choice ONENET_CONNECTION_VIA_MQTT_OR_MQTTS
+        prompt "connect onenet via mqtt or mqtts?"
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        default ONENET_CONNECTION_VIA_MQTT
+        help 
+            "Which protocal of MQTT is used to connect OneNet?"
+
+        config ONENET_CONNECTION_VIA_MQTT
+            bool "connect onenet via mqtt"
+            help 
+                "using mqtt"
+
+        config ONENET_CONNECTION_VIA_MQTTS
+            bool "connect onenet via mqtts"
+            help 
+                "using mqtts"
+
+    endchoice
+
+
+    config ONENET_MQTT_BROKER_ADDR_AND_PORT
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        string "OneNet mqtt broker address and port."
+        default "mqtts.heclouds.com:1883"
+        help 
+            "OneNet Platform address and port"
+
+    config ONENET_MQTT_PRODUCT_ID
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        string "OneNet mqtt product id"
+        default "123456"
+        help 
+            "mqtt product id for connecting onenet."
+    
+    config ONENET_MQTT_DEVICE_USERNAME
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        string "OneNet mqtt device name"
+        default "mqtt_dev1"
+        help 
+            "mqtt device name for connecting onenet."
+    
+    config ONENET_MQTT_CLIENT_TOKEN
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        string "OneNet mqtt device token"
+        default "password"
+        help 
+            "mqtt client token for connecting onenet.
+            this parameter could get from onenet platform. please refer https://open.iot.10086.cn/doc/v5/develop/detail/624"
+
+
+    config EMQX_MQTT_URI
+        string "EMQX BROKER ADDRESS AND PORT"
+        default "192.168.1.17:1883"
+
+    config EMQX_CLIENT_USERNAME
+        string "EMQX CLIENT USERNAME"
+        default "1234567"
+    
+    config EMQX_CLIENT_ID
+        string "EMQX CLIENT ID"
+        default "1234567"
+
+    config EMQX_CLIENT_PASSWD
+        string "EMQX CLIENT PASSWORD"
+        default "password"
+        
+        
+            
+    
+
+endmenu

@@ -1,0 +1,7 @@
+# 不保存build目录
+build/
+# 不保存sdkconfig和sdkconfig.old
+sdkconfig
+sdkconfig.old
+# 不保存vscode的intellisense配置文件夹
+.vscode/
