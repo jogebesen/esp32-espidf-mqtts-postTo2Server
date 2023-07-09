@@ -64,8 +64,7 @@ static const char *TAG_MAIN = "mainFunction-show";
 
 
 static float temperature = -40, humidity = 0, bmp280_air_pressure = 0, bmp280_temp = -40;
-
-
+SemaphoreHandle_t uSemaphoreMutex_sensorData; //该互斥信号量用于保护上述四个 static float 参数在任务访问时不发生冲突。
 
 void uFunc_dht20_get_temp_and_humidity(void)
 {
@@ -95,7 +94,7 @@ void uFunc_dht20_get_temp_and_humidity(void)
 
 
     aht_free_desc(&dev);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
 
 }
 
@@ -140,39 +139,72 @@ void uFunc_bmp280_get_airPressure_and_temperature(void)
 
     bmp280_free_desc(&dev);
 
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
     
 
 }
 
 
-void uTask_post_temperature_and_humidity(void)
+void uTask_dht20_and_bmp280_sense(void *pvParameters)
+{
+    while(1)
+    {
+        if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE){ //未获取到互斥信号量时，portMAX_DELAY意味着该任务将无限阻塞。
+        uFunc_dht20_get_temp_and_humidity();
+        vTaskDelay(150 / portTICK_PERIOD_MS);
+        uFunc_bmp280_get_airPressure_and_temperature();
+
+        ESP_LOGI(TAG_MAIN, "temperature: %f, humidity: %f, airPressure: %f, bmp_temp: %f", temperature, humidity, bmp280_air_pressure, bmp280_temp);
+
+        
+
+        xSemaphoreGive(uSemaphoreMutex_sensorData); 
+        }
+
+        vTaskDelay(3*1000 / portTICK_PERIOD_MS);
+    }
+}
+
+
+void uTask_mqtt_post_to_onenet(void)
 {
     esp_mqtt_client_handle_t mqtt_onenet_client;
     uFunc_mqtt_send2onenet_init(&mqtt_onenet_client);
-    
+
+    while(1)
+    {
+        if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE){
+            uFunc_mqtt_onenet_post_data(&mqtt_onenet_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
+
+            ESP_LOGI(TAG_MAIN, "mqtt_post_to_onenet");
+
+            xSemaphoreGive(uSemaphoreMutex_sensorData);
+        }
+
+        vTaskDelay(15*60*1000 / portTICK_PERIOD_MS);
+    }
+
+}
+
+
+void uTask_mqtt_post_to_emqx(void)
+{
     esp_mqtt_client_handle_t mqtt_emqx_client;
     uFunc_mqtt_send2emqx_init(&mqtt_emqx_client);
 
     while(1)
     {
-        uFunc_dht20_get_temp_and_humidity();
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        uFunc_bmp280_get_airPressure_and_temperature();
+        if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE){
+            uFunc_mqtt_emqx_post_data(&mqtt_emqx_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
 
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+            ESP_LOGI(TAG_MAIN, "mqtt_post_to_emqx");
 
-        ESP_LOGI(TAG_MAIN, "temperature: %f, humidity: %f, airPressure: %f, bmp_temp: %f", temperature, humidity, bmp280_air_pressure, bmp280_temp);
-
-        uFunc_mqtt_onenet_post_data(&mqtt_onenet_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
-
+            xSemaphoreGive(uSemaphoreMutex_sensorData);
+        }
         vTaskDelay(5*1000 / portTICK_PERIOD_MS);
-
-        uFunc_mqtt_emqx_post_data(&mqtt_emqx_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
-
-        vTaskDelay(3*1000 / portTICK_PERIOD_MS);        
-    }
+    }   
 }
+
 
 
 void app_main(void)
@@ -203,10 +235,14 @@ void app_main(void)
     ESP_ERROR_CHECK(i2cdev_init());
     
     
-    xTaskCreate((void *)uTask_post_temperature_and_humidity, "Post_sensorData", 1024 * 10, NULL, 1, NULL);
-
-
-
-
+    uSemaphoreMutex_sensorData = xSemaphoreCreateMutex(); //此互斥信号量用于避免传感器数据访问冲突。
+    if(uSemaphoreMutex_sensorData != NULL)
+    {
+        ESP_LOGI(TAG_MAIN, "SemaphoreMutex_sensorData create succeed");
+        // 以下是需要用到该互斥量的任务。
+        xTaskCreate((void *)uTask_dht20_and_bmp280_sense, "SensorSenseData", configMINIMAL_STACK_SIZE * 8, NULL, 2, NULL);
+        xTaskCreate((void *)uTask_mqtt_post_to_onenet, "MQTT_PostToOneNet", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
+        xTaskCreate((void *)uTask_mqtt_post_to_emqx, "MQTT_PostToEmqx", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
+    }
 
 }
