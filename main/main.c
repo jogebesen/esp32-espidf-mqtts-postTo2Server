@@ -84,7 +84,9 @@ void uFunc_dht20_get_temp_and_humidity(void)
 
     esp_err_t res;
 
+    aht_reset(&dev);
 
+    vTaskDelay(150 / portTICK_PERIOD_MS);
 
     res = aht_get_data(&dev, &temperature, &humidity);
     if (res == ESP_OK)
@@ -171,9 +173,19 @@ void uTask_mqtt_post_to_onenet(void)
     esp_mqtt_client_handle_t mqtt_onenet_client;
     uFunc_mqtt_send2onenet_init(&mqtt_onenet_client);
 
+    int time_min;
+
     while(1)
     {
+        time_min = 15;
+
         if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE){
+            if(humidity == 0 && bmp280_air_pressure == 0){
+                xSemaphoreGive(uSemaphoreMutex_sensorData);
+                vTaskDelay(5*1000 / portTICK_PERIOD_MS);
+                time_min = 15;
+                continue;
+            }
             uFunc_mqtt_onenet_post_data(&mqtt_onenet_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
 
             ESP_LOGI(TAG_MAIN, "mqtt_post_to_onenet");
@@ -181,7 +193,12 @@ void uTask_mqtt_post_to_onenet(void)
             xSemaphoreGive(uSemaphoreMutex_sensorData);
         }
 
-        vTaskDelay(15*60*1000 / portTICK_PERIOD_MS);
+        while(time_min > 0)
+        {
+            vTaskDelay(60*1000 / portTICK_PERIOD_MS);
+            time_min = time_min - 1;
+        }
+        
     }
 
 }
@@ -195,6 +212,11 @@ void uTask_mqtt_post_to_emqx(void)
     while(1)
     {
         if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE){
+            if(humidity == 0 && bmp280_air_pressure == 0){
+                xSemaphoreGive(uSemaphoreMutex_sensorData);
+                vTaskDelay(5*1000 / portTICK_PERIOD_MS);
+                continue;
+            }
             uFunc_mqtt_emqx_post_data(&mqtt_emqx_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
 
             ESP_LOGI(TAG_MAIN, "mqtt_post_to_emqx");
@@ -236,6 +258,7 @@ void app_main(void)
     
     
     uSemaphoreMutex_sensorData = xSemaphoreCreateMutex(); //此互斥信号量用于避免传感器数据访问冲突。
+    xSemaphoreGive(uSemaphoreMutex_sensorData);
     if(uSemaphoreMutex_sensorData != NULL)
     {
         ESP_LOGI(TAG_MAIN, "SemaphoreMutex_sensorData create succeed");
@@ -244,5 +267,7 @@ void app_main(void)
         xTaskCreate((void *)uTask_mqtt_post_to_onenet, "MQTT_PostToOneNet", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
         xTaskCreate((void *)uTask_mqtt_post_to_emqx, "MQTT_PostToEmqx", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
     }
+    else ESP_LOGE(TAG_MAIN, "uSemaphoreMutex_sensorData Create Failed.");
+
 
 }
