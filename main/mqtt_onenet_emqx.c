@@ -8,6 +8,7 @@
 
 #include "../build/config/sdkconfig.h"
 
+#include "onenet_dev_token.h"
 #include "mqtt_onenet_emqx.h"
 
 // OneNet平台相关的MQTT宏定义
@@ -177,13 +178,17 @@ void uFunc_mqtt_send2onenet_init(esp_mqtt_client_handle_t *mqtt_onenet_client)
 {
     char URI[50] = {0};
     sprintf(URI, "%s%s", "mqtts://", CONFIG_ONENET_MQTT_BROKER_ADDR_AND_PORT);
+
+    uint8_t onenet_mqtts_dev_token[256] = {0};
+    onenet_dev_token_generate(onenet_mqtts_dev_token);
+
     const esp_mqtt_client_config_t mqtt_onenet_cfg = {
         .broker.address.uri = URI,
         .broker.verification.certificate = (const char *)MQTTS_certificate_pem_start,
         .broker.verification.skip_cert_common_name_check = true,
         .credentials.client_id = CONFIG_ONENET_MQTT_DEVICE_USERNAME,
         .credentials.username = CONFIG_ONENET_MQTT_PRODUCT_ID,
-        .credentials.authentication.password = CONFIG_ONENET_MQTT_CLIENT_TOKEN,        
+        .credentials.authentication.password = (char *)&onenet_mqtts_dev_token,        
     };
 
     *mqtt_onenet_client = esp_mqtt_client_init(&mqtt_onenet_cfg);

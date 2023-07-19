@@ -20,6 +20,7 @@
 
 #include "mqtt_onenet_emqx.h"
 
+#include "onenet_dev_token.h"
 
 
 
@@ -268,6 +269,7 @@ void app_main(void)
         xTaskCreate((void *)uTask_mqtt_post_to_emqx, "MQTT_PostToEmqx", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
     }
     else ESP_LOGE(TAG_MAIN, "uSemaphoreMutex_sensorData Create Failed.");
+
 
 
 }

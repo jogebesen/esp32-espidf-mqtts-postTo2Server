@@ -100,14 +100,14 @@ menu "Climate_terminal02 configuration"
     config ONENET_MQTT_BROKER_ADDR_AND_PORT
         depends on USE_CMIOT_MQTT_ONENET_PLATFORM
         string "OneNet mqtt broker address and port."
-        default "mqtts.heclouds.com:1883"
+        default "mqttstls.heclouds.com:8883"
         help 
             "OneNet Platform address and port"
 
     config ONENET_MQTT_PRODUCT_ID
         depends on USE_CMIOT_MQTT_ONENET_PLATFORM
         string "OneNet mqtt product id"
-        default "123456"
+        default "539829"
         help 
             "mqtt product id for connecting onenet."
     
@@ -117,11 +117,44 @@ menu "Climate_terminal02 configuration"
         default "mqtt_dev1"
         help 
             "mqtt device name for connecting onenet."
+
+    config ONENET_MQTT_EXPIRE_TIME_IN_UNIX_TIMESTAMP_FORMAT
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        int "OneNet token parameter unix_timestamp"
+        default 1893427200
+        help 
+            "time stamp in unix format, this parameter is used for generating 
+            token that device needed."
+
+    config ONENET_DEVICE_ACCESS_KEY
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        string "OneNet Device access key"
+        default "b0xRMUYxNGhiZnBXZTdkZEFnZFMzZHkxS25MMXRpNU4="
+        help 
+            "device key: this parameter can get from onenet platform."
+
+    
+    choice ONENET_IF_USING_TOKEN_GEN_BY_TOOL
+        prompt "whether to use tool to generate onenet_mqtts_token?"
+        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        default ONENET_MQTT_CLIENT_TOKEN_GEN_BY_FUNCTION
+
+        config ONENET_MQTT_CLIENT_TOKEN_GEN_BY_TOOL
+            bool "OneNet mqtt device token"
+            help 
+                "mqtt client token for connecting onenet.
+                this parameter could get from onenet platform. please refer https://open.iot.10086.cn/doc/v5/develop/detail/624"
+
+        config ONENET_MQTT_CLIENT_TOKEN_GEN_BY_FUNCTION
+            bool "using self-made function to generate token."
+            help 
+                "Use a function in this app to generate onenet_mqtts_token."
+    endchoice
     
     config ONENET_MQTT_CLIENT_TOKEN
-        depends on USE_CMIOT_MQTT_ONENET_PLATFORM
+        depends on ONENET_MQTT_CLIENT_TOKEN_GEN_BY_TOOL
         string "OneNet mqtt device token"
-        default "password"
+        default "version=2018-10-31&res=products%2F539829%2Fdevices%2Fmqtt_dev1&et=1893427200&method=sha256&sign=xGb615QYYZhfcfX%2Fq00SzkpEvHXMhdbooFu4gztEPLY%3D"
         help 
             "mqtt client token for connecting onenet.
             this parameter could get from onenet platform. please refer https://open.iot.10086.cn/doc/v5/develop/detail/624"
