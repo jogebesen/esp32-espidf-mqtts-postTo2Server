@@ -6,6 +6,9 @@
 #include <esp_system.h>
 #include <aht.h>
 #include <bmp280.h>
+#include <pcf8574.h>
+#include <hd44780.h>
+#include <i2cdev.h>
 #include <esp_err.h>
 
 #include "esp_partition.h"
@@ -59,6 +62,8 @@
 static const char *AHT_TAG = "aht-show";
 
 static const char *TAG_BMP280 = "bmp280-show";
+
+static const char *TAG_LCD1602 = "lcd1602-show";
 
 static const char *TAG_MAIN = "mainFunction-show";
 
@@ -189,7 +194,7 @@ void uTask_mqtt_post_to_onenet(void)
             }
             uFunc_mqtt_onenet_post_data(&mqtt_onenet_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
 
-            ESP_LOGI(TAG_MAIN, "mqtt_post_to_onenet");
+            ESP_LOGD(TAG_MAIN, "mqtt_post_to_onenet");
 
             xSemaphoreGive(uSemaphoreMutex_sensorData);
         }
@@ -220,13 +225,99 @@ void uTask_mqtt_post_to_emqx(void)
             }
             uFunc_mqtt_emqx_post_data(&mqtt_emqx_client, temperature, humidity, bmp280_air_pressure, bmp280_temp);
 
-            ESP_LOGI(TAG_MAIN, "mqtt_post_to_emqx");
+            ESP_LOGD(TAG_MAIN, "mqtt_post_to_emqx");
 
             xSemaphoreGive(uSemaphoreMutex_sensorData);
         }
         vTaskDelay(5*1000 / portTICK_PERIOD_MS);
     }   
 }
+
+
+
+
+
+
+static i2c_dev_t pcf8574;
+
+static esp_err_t write_lcd_data(const hd44780_t *lcd, uint8_t data)
+{
+    return pcf8574_port_write(&pcf8574, data);
+}
+
+void uTask_lcd1602_display_sensor_data(void *pvParemeters)
+{
+    static const uint8_t centigrade[] = {0x18, 0x1e, 0x09, 0x08, 0x08, 0x08, 0x09, 0x06};
+
+    hd44780_t lcd1602 = {
+        .write_cb = write_lcd_data,
+        .font = HD44780_FONT_5X8,
+        .lines = 2,
+        .pins = {
+            .rs = 0,
+            .e = 2,
+            .d4 = 4,
+            .d5 = 5,
+            .d6 = 6,
+            .d7 = 7,
+            .bl = 3
+        }
+    };
+
+    memset(&pcf8574, 0, sizeof(i2c_dev_t));
+    pcf8574_init_desc(&pcf8574, CONFIG_LCD1602_PCF8574_I2C_ADDRESS, CONFIG_LCD1602_PCF8574_I2C_PORT, CONFIG_LCD1602_PCF8574_I2C_SDA_PIN, CONFIG_LCD1602_PCF8574_I2C_SCL_PIN); //SCL: 19, SDA: 18.
+    
+    char display_data[32] = {0};
+    
+    while(1)
+    {
+        //如果还未连接使用pcf8574的lcd1602屏幕的话。
+        if(i2c_dev_probe(&pcf8574, I2C_DEV_WRITE) != ESP_OK){
+            ESP_LOGW(TAG_LCD1602, "lcd1602 didn't exist.");
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        hd44780_init(&lcd1602);   //可运用该命令清屏且不影响后续显示，意思是：清屏后仍可持续调用hd44780_gotoxy()函数和hd44780_puts()函数。
+        hd44780_switch_backlight(&lcd1602, true);
+
+        hd44780_upload_character(&lcd1602, 0, centigrade);
+
+        ESP_LOGV(TAG_LCD1602, "LCD1602 task is running ");
+        if(xSemaphoreTake(uSemaphoreMutex_sensorData, portMAX_DELAY) == pdTRUE)
+        {
+            if(humidity == 0 && bmp280_air_pressure == 0){
+                xSemaphoreGive(uSemaphoreMutex_sensorData);
+                ESP_LOGD(TAG_LCD1602, "LCD1602 Display: Sensor didn't get data.");
+                vTaskDelay(2000 / portTICK_PERIOD_MS);
+                continue;
+            }
+            
+            snprintf(display_data, 17, "%s %5.1f %c", "temp:", temperature, '\x08');
+            ESP_LOGD(TAG_LCD1602, "lcd data: %s", display_data);
+
+            hd44780_gotoxy(&lcd1602, 0, 0);
+            hd44780_puts(&lcd1602, display_data);
+
+
+            snprintf(display_data + 16, 17, "%s %5.1f %s ", "aP:", bmp280_air_pressure/100, "hPa");
+            ESP_LOGD(TAG_LCD1602, "lcd+16 data: %s", display_data + 16);
+
+            hd44780_gotoxy(&lcd1602, 0, 1);
+            hd44780_puts(&lcd1602, display_data + 16);
+
+            xSemaphoreGive(uSemaphoreMutex_sensorData);
+
+        }
+                
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+    }
+
+}
+
+
+
 
 
 
@@ -265,11 +356,12 @@ void app_main(void)
         ESP_LOGI(TAG_MAIN, "SemaphoreMutex_sensorData create succeed");
         // 以下是需要用到该互斥量的任务。
         xTaskCreate((void *)uTask_dht20_and_bmp280_sense, "SensorSenseData", configMINIMAL_STACK_SIZE * 8, NULL, 2, NULL);
-        xTaskCreate((void *)uTask_mqtt_post_to_onenet, "MQTT_PostToOneNet", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
+        // xTaskCreate((void *)uTask_mqtt_post_to_onenet, "MQTT_PostToOneNet", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
         xTaskCreate((void *)uTask_mqtt_post_to_emqx, "MQTT_PostToEmqx", configMINIMAL_STACK_SIZE * 8, NULL, 1, NULL);
+
+        xTaskCreate((void *)uTask_lcd1602_display_sensor_data, "LCD1602_Display", configMINIMAL_STACK_SIZE * 10, NULL, 1, NULL);
     }
     else ESP_LOGE(TAG_MAIN, "uSemaphoreMutex_sensorData Create Failed.");
-
 
 
 }

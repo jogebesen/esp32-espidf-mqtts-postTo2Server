@@ -176,7 +176,39 @@ menu "Climate_terminal02 configuration"
         string "EMQX CLIENT PASSWORD"
         default "password"
         
-        
+    
+    config USE_LCD1602_AS_DISPLAY_EQUIPMENT
+        bool "Use lcd1602 as display equipment?"
+        default y
+        help 
+            "This means we can use lcd1602 to display data."
+
+    config LCD1602_PCF8574_I2C_ADDRESS
+        depends on  USE_LCD1602_AS_DISPLAY_EQUIPMENT
+        hex "lcd1602---pcf8574 i2c address"
+        default 0x27
+
+    config LCD1602_PCF8574_I2C_PORT
+        depends on USE_LCD1602_AS_DISPLAY_EQUIPMENT
+        int "which i2c port used to drive lcd1602?"
+        range 0 1
+        default 1
+
+    config LCD1602_PCF8574_I2C_SCL_PIN
+        depends on USE_LCD1602_AS_DISPLAY_EQUIPMENT
+        int "scl pin: lcd1602 driven by pcf8574!"
+        default 19
+        help 
+            "If we wish to use pcf8574 as io-expander to drive lcd1602,
+            this should be set."
+    
+    config LCD1602_PCF8574_I2C_SDA_PIN
+        depends on USE_LCD1602_AS_DISPLAY_EQUIPMENT
+        int "sda pin: lcd1602 driven by pcf8574!"
+        default 18
+        help 
+            "If we wish to use pcf8574 as io-expander to drive lcd1602,
+            this should be set."
             
     
 
